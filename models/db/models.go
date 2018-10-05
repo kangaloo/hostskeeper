@@ -7,6 +7,7 @@ type Host struct {
 	IP             string
 	HostName       string
 	IsInit         bool
+	SpecID         int
 	PresentVersion Version
 	Spec           Spec
 	Files          []File
@@ -14,9 +15,9 @@ type Host struct {
 
 type Spec struct {
 	ID    int
-	Cpu   string
-	Mem   string
-	Disk  string
+	Cpu   int
+	Mem   int
+	Disk  int
 	Hosts []Host
 }
 

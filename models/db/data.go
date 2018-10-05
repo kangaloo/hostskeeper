@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -21,8 +22,8 @@ func GetAllHost(db *sqlx.DB) ([]Host, error) {
 	return hosts, nil
 }
 
-func GetHostsIsInit(db *sqlx.DB, init bool) ([]Host, error)  {
-	hosts, err :=  getHostsWithQuery(db, isInit, init)
+func GetHostsIsInit(db *sqlx.DB, init bool) ([]Host, error) {
+	hosts, err := getHostsWithQuery(db, isInit, init)
 
 	if err != nil {
 		return nil, err
@@ -36,10 +37,10 @@ func GetHostsIsInit(db *sqlx.DB, init bool) ([]Host, error)  {
 	return hosts, nil
 }
 
-func scanHosts(rows *sql.Rows) ([]Host, error)  {
+func scanHosts(rows *sql.Rows) ([]Host, error) {
 	defer rows.Close()
 
-	hosts := make([]Host, 0 , 256)
+	hosts := make([]Host, 0, 256)
 
 	for rows.Next() {
 		h := &Host{}
@@ -70,15 +71,15 @@ func ConvertJson(src map[string]Host) ([]byte, error) {
 
 	hosts, err := json.Marshal(src)
 
-	dest := bytes.NewBuffer(make([]byte, 0, 1024))
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 
-	json.Indent(dest, hosts, "", "\t")
+	json.Indent(buf, hosts, "", "\t")
 
 	if err != nil {
 		return nil, err
 	}
 
-	return dest.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 func GetHostsByIP(db *sqlx.DB, ip string) ([]Host, error) {
@@ -136,7 +137,7 @@ func getFiles(db *sqlx.DB, hosts *[]Host) error {
 	return nil
 }
 
-func getHostsWithQuery(db *sqlx.DB, query string, args... interface{}) ([]Host, error) {
+func getHostsWithQuery(db *sqlx.DB, query string, args ...interface{}) ([]Host, error) {
 	rows, err := getRowsWithQuery(db, query, args...)
 
 	if err != nil {
@@ -146,7 +147,7 @@ func getHostsWithQuery(db *sqlx.DB, query string, args... interface{}) ([]Host, 
 	return scanHosts(rows)
 }
 
-func getRowsWithQuery(db *sqlx.DB, query string, args... interface{}) (*sql.Rows, error) {
+func getRowsWithQuery(db *sqlx.DB, query string, args ...interface{}) (*sql.Rows, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -159,3 +160,100 @@ func scanRows(rows *sqlx.Rows, dest []interface{}) error {
 	return nil
 }
 
+func getSpecId(s *Spec) (int, error) {
+	if s == nil {
+		return 0, errors.New("nil spec")
+	}
+
+	specs, err := getSpecs(DB, s.Cpu, s.Mem, s.Disk)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(specs) > 1 {
+		return 0, errors.New("too many specs")
+	}
+
+	if len(specs) == 0 {
+		// 不存在时创建一个并返回规格id
+		id, err := addSpec(DB, s.Cpu, s.Mem, s.Disk)
+		if err != nil {
+			return 0, err
+		}
+
+		return int(id), nil
+	}
+
+	// 存在这种规格时，直接返回规格id
+	return specs[0].ID, nil
+}
+
+func getSpecs(db *sqlx.DB, c, m, d int) ([]Spec, error) {
+
+	if c == 0 || m == 0 || d == 0 {
+		return nil, errors.New("wrong spec")
+	}
+
+	query := "select id, cpu, mem, disk from specs where cpu = ? and mem = ? and disk = ?"
+	rows, err := getRowsWithQuery(db, query, c, m, d)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return scanSpecs(rows)
+}
+
+func scanSpecs(rows *sql.Rows) ([]Spec, error) {
+	defer rows.Close()
+
+	var specs []Spec
+
+	for rows.Next() {
+		s := &Spec{}
+		err := rows.Scan(&(s.ID), &(s.Cpu), &(s.Mem), &(s.Disk))
+		if err != nil {
+			return nil, err
+		}
+
+		specs = append(specs, *s)
+	}
+
+	return specs, nil
+}
+
+func addSpec(db *sqlx.DB, c, m, d int) (int64, error) {
+	res, err := db.Exec("insert into specs(cpu, mem, disk) VALUE (?, ?, ?)", c, m, d)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return res.LastInsertId()
+}
+
+func insertHost(db *sqlx.DB, h *Host) (int, error) {
+
+	res, err := db.Exec("insert into hosts(ip, host_name, spec_id) VALUE (?, ?, ?)", h.IP, h.HostName, h.SpecID)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+
+	return int(id), err
+}
+
+func AddHost(h *Host) (int, error) {
+
+	specId, err := getSpecId(&(h.Spec))
+
+	if err != nil {
+		return 0, err
+	}
+
+	h.SpecID = specId
+
+	return insertHost(DB, h)
+}

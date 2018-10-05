@@ -71,7 +71,7 @@ func (c *Host) ListAll() {
 	c.Ctx.ResponseWriter.Write(hosts)
 }
 
-func (c *Host) ListInit()  {
+func (c *Host) ListInit() {
 
 	i, err := c.GetBool("init")
 
@@ -100,7 +100,7 @@ func (c *Host) ListInit()  {
 	c.Ctx.ResponseWriter.Write(hosts)
 }
 
-func (c *Host) GetByIp()  {
+func (c *Host) GetByIp() {
 	ip := c.GetString("ip")
 	// ip合法性检查
 	h, err := db.GetHostsByIP(db.DB, ip)
@@ -131,4 +131,71 @@ func (c *Host) GetByIp()  {
 
 	c.Ctx.ResponseWriter.Write(host.Bytes())
 	return
+}
+
+func (c *Host) Add() {
+	h := scanHost(c)
+	s, err := scanSpec(c)
+
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return
+	}
+
+	h.Spec = *s
+
+	id, err := db.AddHost(h)
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return
+	}
+
+	logs.Info(id)
+	c.Ctx.ResponseWriter.Write([]byte("\n"))
+}
+
+func scanSpec(c *Host) (*db.Spec, error) {
+	cpu, err := c.GetInt("cpu")
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return nil, err
+	}
+
+	mem, err := c.GetInt("mem")
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return nil, err
+	}
+
+	disk, err := c.GetInt("disk")
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return nil, err
+	}
+
+	spec := &db.Spec{
+		Cpu:  cpu,
+		Mem:  mem,
+		Disk: disk,
+	}
+
+	return spec, nil
+}
+
+func scanHost(c *Host) *db.Host {
+
+	ip := c.GetString("ip")
+	hostName := c.GetString("hostname")
+
+	host := &db.Host{
+		IP:       ip,
+		HostName: hostName,
+	}
+
+	return host
 }
