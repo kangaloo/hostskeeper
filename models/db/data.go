@@ -82,8 +82,27 @@ func ConvertJson(src map[string]Host) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func GetHostsByIP(db *sqlx.DB, ip string) ([]Host, error) {
-	hosts, err := getHostsWithQuery(db, queryHostWithIP, ip)
+func GetHostsByIp(db *sqlx.DB, ip string) ([]Host, error) {
+	hosts, err := getHostsWithQuery(db, queryHostByIp, ip)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = getFiles(db, &hosts)
+	if err != nil {
+		return nil, err
+	}
+
+	return hosts, nil
+}
+
+func GetHostsById(id int) ([]Host, error) {
+	return getHostsById(DB, id)
+}
+
+func getHostsById(db *sqlx.DB, id int) ([]Host, error) {
+	hosts, err := getHostsWithQuery(db, queryHostById, id)
 
 	if err != nil {
 		return nil, err
@@ -99,7 +118,7 @@ func GetHostsByIP(db *sqlx.DB, ip string) ([]Host, error) {
 
 // 根据hostID从files和versions表联合查询的结果中获取主机文件列表
 func getFilesById(db *sqlx.DB, id int) ([]File, error) {
-	rows, err := db.Query(queryFileWithIP, id)
+	rows, err := db.Query(queryFileById, id)
 	if err != nil {
 		return nil, err
 	}

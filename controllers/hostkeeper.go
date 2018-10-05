@@ -103,7 +103,7 @@ func (c *Host) ListInit() {
 func (c *Host) GetByIp() {
 	ip := c.GetString("ip")
 	// ip合法性检查
-	h, err := db.GetHostsByIP(db.DB, ip)
+	h, err := db.GetHostsByIp(db.DB, ip)
 
 	if err != nil {
 		c.Ctx.ResponseWriter.Write([]byte("error"))
@@ -153,7 +153,27 @@ func (c *Host) Add() {
 	}
 
 	logs.Info(id)
-	c.Ctx.ResponseWriter.Write([]byte("\n"))
+
+	hosts, err := db.GetHostsById(id)
+
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return
+	}
+
+	b, err := json.Marshal(hosts)
+	if err != nil {
+		c.Ctx.ResponseWriter.Write([]byte("error"))
+		logs.Error(err)
+		return
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	json.Indent(buf, b, "", "\t")
+
+	c.Ctx.ResponseWriter.Write(buf.Bytes())
+	c.Ctx.ResponseWriter.Write([]byte("add hosts successful"))
 }
 
 func scanSpec(c *Host) (*db.Spec, error) {
